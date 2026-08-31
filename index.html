@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PRism — Intelligent PR Trust & Merge Verification</title>
+<style>
+  :root {
+    --color-midnight-carbon: #12130f;
+    --color-bone-glow: #e4dfda;
+    --color-charcoal-vein: #3c3c38;
+    --color-rose-quartz-bloom: #f5c2c8;
+
+    --font-technik: 'JetBrains Mono', 'IBM Plex Mono', monospace;
+    --font-display: 'Departure Mono', 'JetBrains Mono', monospace;
+    --font-contrast: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--color-midnight-carbon);
+    color: var(--color-bone-glow);
+    font-family: var(--font-contrast);
+    font-weight: 400;
+    overflow-x: hidden;
+  }
+
+  a { color: var(--color-bone-glow); text-decoration: none; }
+
+  .label {
+    font-family: var(--font-technik); font-size: 12px; line-height: 1.25;
+    letter-spacing: -0.6px; text-transform: uppercase; color: var(--color-bone-glow);
+  }
+
+  /* Hero */
+  .hero { min-height: 100vh; position: relative; padding: 24px; display: flex; flex-direction: column; }
+
+  .top-row { display: flex; justify-content: space-between; align-items: flex-start; }
+  .wordmark {
+    font-family: var(--font-display); font-size: 32px; line-height: 0.9;
+    letter-spacing: -0.5px;
+  }
+  .nav-pills { display: flex; gap: 4px; }
+  .pill {
+    border-radius: 9999px; padding: 10px 18px; font-family: var(--font-technik);
+    font-size: 12px; letter-spacing: -0.6px; border: 1px solid var(--color-charcoal-vein);
+    background: transparent; color: var(--color-bone-glow); cursor: pointer;
+  }
+  .pill:hover { border-color: var(--color-bone-glow); }
+  .pill-solid { background: var(--color-bone-glow); color: var(--color-midnight-carbon); border: none; }
+
+  .artifact-zone { flex: 1; display: flex; align-items: center; justify-content: center; position: relative; }
+  #prism-canvas { width: 100%; max-width: 520px; height: 420px; display: block; }
+  @media (max-width: 768px) { #prism-canvas { height: 280px; } }
+
+  .bottom-row { display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; }
+  .bio-cluster { display: flex; flex-direction: column; gap: 4px; max-width: 420px; }
+  .bio-cluster .status-line {
+    font-family: var(--font-display); font-size: 56px; line-height: 0.75; letter-spacing: -1px; margin: 4px 0;
+  }
+  .bio-cluster p.desc { font-family: var(--font-contrast); font-size: 16px; line-height: 1.25; color: var(--color-bone-glow); margin-top: 4px; }
+
+  .social-cluster { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; }
+
+  /* Sections below fold */
+  section { padding: 64px 24px; border-top: 1px solid var(--color-charcoal-vein); }
+  .section-label { margin-bottom: 24px; }
+
+  .row-flat {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 0;
+  }
+  .row-flat > div {
+    padding: 0 24px; border-left: 1px solid var(--color-charcoal-vein);
+  }
+  .row-flat > div:first-child { padding-left: 0; border-left: none; }
+  .row-flat h3 {
+    font-family: var(--font-contrast); font-size: 30px; line-height: 1.13; letter-spacing: -0.5px;
+    margin-bottom: 12px;
+  }
+  .row-flat p { font-size: 16px; line-height: 1.25; color: var(--color-bone-glow); }
+  .row-flat .idx { font-family: var(--font-technik); font-size: 12px; letter-spacing: -0.6px; color: var(--color-charcoal-vein); margin-bottom: 12px; }
+
+  .tags-row { display: flex; gap: 4px; margin-top: 24px; flex-wrap: wrap; }
+  .tag {
+    border-radius: 9999px; padding: 8px 16px; font-family: var(--font-technik);
+    font-size: 12px; letter-spacing: -0.6px; border: 1px solid var(--color-charcoal-vein);
+  }
+
+  .demo-block { max-width: 520px; }
+  .demo-input { display: flex; gap: 4px; margin-top: 24px; }
+  .demo-input input {
+    flex: 1; background: transparent; border: 1px solid var(--color-charcoal-vein);
+    border-radius: 9999px; padding: 12px 20px; color: var(--color-bone-glow);
+    font-family: var(--font-technik); font-size: 12px; letter-spacing: -0.6px;
+  }
+  .demo-input input::placeholder { color: var(--color-charcoal-vein); }
+  .demo-input input:focus { outline: none; border-color: var(--color-bone-glow); }
+
+  footer {
+    padding: 24px; display: flex; justify-content: space-between;
+    border-top: 1px solid var(--color-charcoal-vein);
+  }
+  footer .label { color: var(--color-charcoal-vein); }
+
+  @media (max-width: 768px) {
+    .row-flat { grid-template-columns: 1fr; gap: 24px; }
+    .row-flat > div { border-left: none; padding-left: 0; border-top: 1px solid var(--color-charcoal-vein); padding-top: 24px; }
+    .row-flat > div:first-child { border-top: none; padding-top: 0; }
+    .bottom-row { flex-direction: column; align-items: flex-start; gap: 32px; }
+    .social-cluster { align-items: flex-start; }
+    .bio-cluster .status-line { font-size: 40px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="top-row">
+    <div class="wordmark">PRISM</div>
+    <div class="nav-pills">
+      <a class="pill" href="dashboard.html">Dashboard</a>
+      <a class="pill" href="#">Source</a>
+      <a class="pill pill-solid" href="#demo">Run a scan</a>
+    </div>
+  </div>
+
+  <div class="artifact-zone">
+    <canvas id="prism-canvas"></canvas>
+  </div>
+
+  <div class="bottom-row">
+    <div class="bio-cluster">
+      <div class="label">STATUS — LIVE</div>
+      <div class="status-line">VERIFIED</div>
+      <p class="desc">PRism scans real repos for real gaps, writes a genuine fix, and proves the diff matches the message before anything ships. No empty commits. No padded work.</p>
+    </div>
+    <div class="social-cluster">
+      <div class="label">INTELLIGENT PR TRUST</div>
+      <div class="label">&amp; MERGE VERIFICATION</div>
+      <div class="label" style="margin-top:12px; color: var(--color-charcoal-vein);">BUILT BY TARUN</div>
+    </div>
+  </div>
+</div>
+
+<section id="how">
+  <div class="section-label label">// HOW IT WORKS</div>
+  <div class="row-flat">
+    <div>
+      <div class="idx">01</div>
+      <h3>Scanner</h3>
+      <p>Walks a repo for untested logic, dead branches, and missing coverage — not keyword noise.</p>
+    </div>
+    <div>
+      <div class="idx">02</div>
+      <h3>Fixer</h3>
+      <p>Writes the fix, runs the real test suite, rejects anything the tests don't back up.</p>
+    </div>
+    <div>
+      <div class="idx">03</div>
+      <h3>Shipper</h3>
+      <p>Opens the PR. Auto-merges on owned repos after CI passes — external repos stop at review.</p>
+    </div>
+    <div>
+      <div class="idx">04</div>
+      <h3>Ledger</h3>
+      <p>Every verified PR, timestamped and provable, on a dashboard you can actually send.</p>
+    </div>
+  </div>
+  <div class="tags-row">
+    <span class="tag">VERIFIED DIFF-TO-MESSAGE MATCH</span>
+    <span class="tag">READ-ONLY ON EXTERNAL REPOS</span>
+    <span class="tag">ZERO FABRICATED TESTS</span>
+  </div>
+</section>
+
+<section id="demo">
+  <div class="section-label label">// TRY IT</div>
+  <div class="demo-block">
+    <div style="font-size:30px; font-family: var(--font-contrast); line-height:1.13; letter-spacing:-0.5px;">Run a live scan on your own repo</div>
+    <p style="font-size:16px; line-height:1.25; margin-top:12px; color: var(--color-bone-glow);">Read-only. We scan a public repo and show what we'd find — nothing is written back.</p>
+    <div class="demo-input">
+      <input type="text" placeholder="github.com/username">
+      <a class="pill pill-solid" href="#">Scan</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <span class="label">PRISM — INTELLIGENT PR TRUST &amp; MERGE VERIFICATION</span>
+  <span class="label">© 2026</span>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function() {
+  const canvas = document.getElementById('prism-canvas');
+  const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+  const scene = new THREE.Scene();
+
+  function getSize() {
+    const rect = canvas.getBoundingClientRect();
+    return { w: rect.width || 520, h: rect.height || 420 };
+  }
+  let { w, h } = getSize();
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(w, h, false);
+
+  const camera = new THREE.PerspectiveCamera(38, w / h, 0.1, 100);
+  camera.position.set(0, 0, 7);
+
+  // Triangular prism: cylinder with 3 radial segments, laid on its side
+  const geometry = new THREE.CylinderGeometry(1.6, 1.6, 3.4, 3, 1, false);
+  const material = new THREE.MeshStandardMaterial({
+    color: 0xe4dfda,
+    metalness: 0.15,
+    roughness: 0.35,
+    flatShading: true,
+    transparent: true,
+    opacity: 0.92
+  });
+  const prism = new THREE.Mesh(geometry, material);
+  prism.rotation.z = Math.PI / 2;
+  prism.rotation.x = 0.35;
+  scene.add(prism);
+
+  // Wireframe overlay for the "engineering blueprint" edge look
+  const wireGeo = new THREE.EdgesGeometry(geometry);
+  const wireMat = new THREE.LineBasicMaterial({ color: 0xe4dfda, transparent: true, opacity: 0.5 });
+  const wireframe = new THREE.LineSegments(wireGeo, wireMat);
+  wireframe.rotation.copy(prism.rotation);
+  scene.add(wireframe);
+
+  // Lighting: dim ambient + bone-white key light + rose-quartz rim light
+  scene.add(new THREE.AmbientLight(0x2a2925, 1.2));
+  const key = new THREE.DirectionalLight(0xe4dfda, 1.1);
+  key.position.set(-4, 3, 5);
+  scene.add(key);
+  const rim = new THREE.PointLight(0xf5c2c8, 2.2, 20);
+  rim.position.set(4, -1, 3);
+  scene.add(rim);
+
+  function animate() {
+    requestAnimationFrame(animate);
+    prism.rotation.y += 0.004;
+    wireframe.rotation.y = prism.rotation.y;
+    renderer.render(scene, camera);
+  }
+  animate();
+
+  window.addEventListener('resize', function() {
+    const size = getSize();
+    camera.aspect = size.w / size.h;
+    camera.updateProjectionMatrix();
+    renderer.setSize(size.w, size.h, false);
+  });
+})();
+</script>
+</body>
+</html>

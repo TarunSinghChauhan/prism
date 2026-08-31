@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PRism — Dashboard</title>
+<style>
+  :root {
+    --color-midnight-carbon: #12130f;
+    --color-bone-glow: #e4dfda;
+    --color-charcoal-vein: #3c3c38;
+    --color-rose-quartz-bloom: #f5c2c8;
+
+    --font-technik: 'JetBrains Mono', 'IBM Plex Mono', monospace;
+    --font-display: 'Departure Mono', 'JetBrains Mono', monospace;
+    --font-contrast: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--color-midnight-carbon);
+    color: var(--color-bone-glow);
+    font-family: var(--font-contrast);
+    font-weight: 400;
+  }
+
+  a { color: var(--color-bone-glow); text-decoration: none; }
+
+  .label {
+    font-family: var(--font-technik); font-size: 12px; line-height: 1.25;
+    letter-spacing: -0.6px; text-transform: uppercase; color: var(--color-bone-glow);
+  }
+  .label.dim { color: var(--color-charcoal-vein); }
+
+  .preview-banner {
+    background: var(--color-rose-quartz-bloom); color: var(--color-midnight-carbon);
+    padding: 10px 24px; font-family: var(--font-technik); font-size: 12px;
+    letter-spacing: -0.6px; text-align: center;
+  }
+  .top-row {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    padding: 24px; border-bottom: 1px solid var(--color-charcoal-vein);
+  }
+  .wordmark { font-family: var(--font-display); font-size: 32px; line-height: 0.9; letter-spacing: -0.5px; }
+  .nav-pills { display: flex; gap: 4px; }
+  .pill {
+    border-radius: 9999px; padding: 10px 18px; font-family: var(--font-technik);
+    font-size: 12px; letter-spacing: -0.6px; border: 1px solid var(--color-charcoal-vein);
+    background: transparent; color: var(--color-bone-glow); cursor: pointer;
+  }
+  .pill:hover { border-color: var(--color-bone-glow); }
+  .pill-solid { background: var(--color-bone-glow); color: var(--color-midnight-carbon); border: none; }
+
+  /* Page head */
+  .page-head { padding: 48px 24px 24px; }
+  .page-head h1 {
+    font-family: var(--font-display); font-size: 72px; line-height: 0.75; letter-spacing: -1px;
+  }
+  .page-head p { font-size: 16px; line-height: 1.25; margin-top: 16px; max-width: 480px; }
+
+  /* Stat readouts */
+  .stats-row {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    border-top: 1px solid var(--color-charcoal-vein);
+  }
+  .stat {
+    padding: 24px; border-left: 1px solid var(--color-charcoal-vein);
+  }
+  .stat:first-child { border-left: none; }
+  .stat .num {
+    font-family: var(--font-display); font-size: 56px; line-height: 0.75; letter-spacing: -1px;
+  }
+  .stat .lbl { margin-top: 8px; }
+
+  /* Section */
+  section { padding: 48px 24px; border-top: 1px solid var(--color-charcoal-vein); }
+  .section-label { margin-bottom: 24px; }
+
+  /* Heatmap */
+  .heatmap-wrap { max-width: 800px; overflow-x: auto; }
+  .heatmap {
+    display: grid; grid-template-columns: repeat(52, 1fr); grid-template-rows: repeat(7, 1fr);
+    grid-auto-flow: column; gap: 3px; width: 100%; aspect-ratio: 52 / 8;
+  }
+  .heatmap .cell { border-radius: 2px; background: var(--color-charcoal-vein); }
+  .heatmap .cell.l1 { background: rgba(228,223,218,0.25); }
+  .heatmap .cell.l2 { background: rgba(228,223,218,0.5); }
+  .heatmap .cell.l3 { background: rgba(228,223,218,0.75); }
+  .heatmap .cell.l4 { background: var(--color-bone-glow); }
+  .heatmap-legend { display: flex; align-items: center; gap: 6px; margin-top: 12px; }
+  .legend-swatch { width: 10px; height: 10px; display: inline-block; }
+
+  /* PR list */
+  .pr-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 0; border-bottom: 1px solid var(--color-charcoal-vein); gap: 16px; flex-wrap: wrap;
+  }
+  .pr-row:last-child { border-bottom: none; }
+  .pr-repo { font-size: 16px; line-height: 1.25; }
+  .pr-repo .sub { display: block; margin-top: 4px; }
+  .pr-pipeline { display: flex; gap: 8px; }
+  .pipe-step.dim { color: var(--color-charcoal-vein); }
+  .tag {
+    border-radius: 9999px; padding: 8px 16px; border: 1px solid var(--color-charcoal-vein);
+    white-space: nowrap;
+  }
+  .tag.on { border-color: var(--color-bone-glow); }
+
+  /* Demo */
+  .demo-input { display: flex; gap: 4px; margin-top: 24px; max-width: 420px; }
+  .demo-input input {
+    flex: 1; background: transparent; border: 1px solid var(--color-charcoal-vein);
+    border-radius: 9999px; padding: 12px 20px; color: var(--color-bone-glow);
+    font-family: var(--font-technik); font-size: 12px; letter-spacing: -0.6px;
+  }
+  .demo-input input::placeholder { color: var(--color-charcoal-vein); }
+  .demo-input input:focus { outline: none; border-color: var(--color-bone-glow); }
+
+  footer {
+    padding: 24px; display: flex; justify-content: space-between;
+    border-top: 1px solid var(--color-charcoal-vein);
+  }
+
+  @media (max-width: 900px) {
+    .stats-row { grid-template-columns: 1fr 1fr; }
+    .stats-row .stat:nth-child(3) { border-left: 1px solid var(--color-charcoal-vein); }
+    .heatmap { grid-template-columns: repeat(13, 1fr); }
+  }
+  @media (max-width: 600px) {
+    .stats-row { grid-template-columns: 1fr; }
+    .stat { border-left: none !important; border-top: 1px solid var(--color-charcoal-vein); }
+    .stat:first-child { border-top: none; }
+    .page-head h1 { font-size: 48px; }
+    .pr-row { flex-direction: column; align-items: flex-start; }
+  }
+</style>
+</head>
+<body>
+
+<div class="preview-banner">⚠ DESIGN PREVIEW — ALL NUMBERS AND PRs BELOW ARE PLACEHOLDER DATA, NOT LIVE</div>
+<div class="top-row">
+  <div class="wordmark">PRISM</div>
+  <div class="nav-pills">
+    <a class="pill" href="index.html">Home</a>
+    <a class="pill" href="#">Source</a>
+    <a class="pill pill-solid" href="#demo">Scan a repo</a>
+  </div>
+</div>
+
+<div class="page-head">
+  <div class="label dim">// VERIFIED CONTRIBUTION LEDGER</div>
+  <h1>TARUN</h1>
+  <p>Every PR below passed the same check: the diff matches the message, and real tests back it up. Nothing here is padded.</p>
+</div>
+
+<div class="stats-row">
+  <div class="stat">
+    <div class="num">5</div>
+    <div class="label lbl">REPOS MONITORED</div>
+  </div>
+  <div class="stat">
+    <div class="num">3</div>
+    <div class="label lbl">OSS PRs SUBMITTED</div>
+  </div>
+  <div class="stat">
+    <div class="num">100%</div>
+    <div class="label lbl">VERIFIED DIFF MATCH</div>
+  </div>
+  <div class="stat">
+    <div class="num">0</div>
+    <div class="label lbl">EMPTY/REJECTED COMMITS</div>
+  </div>
+</div>
+
+<section>
+  <div class="section-label label dim">// CONTRIBUTION ACTIVITY</div>
+  <div class="heatmap-wrap">
+    <div class="heatmap" id="heatmap"></div>
+  </div>
+  <div class="heatmap-legend label dim">
+    <span>LESS</span>
+    <span class="legend-swatch" style="background: var(--color-charcoal-vein);"></span>
+    <span class="legend-swatch" style="background: rgba(228,223,218,0.25);"></span>
+    <span class="legend-swatch" style="background: rgba(228,223,218,0.5);"></span>
+    <span class="legend-swatch" style="background: rgba(228,223,218,0.75);"></span>
+    <span class="legend-swatch" style="background: var(--color-bone-glow);"></span>
+    <span>MORE</span>
+  </div>
+</section>
+
+<section>
+  <div class="section-label label dim">// RECENT PULL REQUESTS</div>
+
+  <div class="pr-row">
+    <div class="pr-repo">
+      qdrant/qdrant-client — datetime_utils.parse truncation fix
+      <span class="sub label dim">#1380 · EXTERNAL REPO</span>
+    </div>
+    <div class="pr-pipeline label">
+      <span>SCANNED</span>·<span>FIXED</span>·<span>TESTED</span>·<span>OPENED</span>·<span class="pipe-step dim">MERGED</span>
+    </div>
+    <span class="tag label">PENDING REVIEW</span>
+  </div>
+
+  <div class="pr-row">
+    <div class="pr-repo">
+      langchain-ai/langsmith-sdk — feedback_config Pydantic union bug
+      <span class="sub label dim">#3429 · EXTERNAL REPO</span>
+    </div>
+    <div class="pr-pipeline label">
+      <span>SCANNED</span>·<span>FIXED</span>·<span>TESTED</span>·<span>OPENED</span>·<span class="pipe-step dim">MERGED</span>
+    </div>
+    <span class="tag label">PENDING REVIEW</span>
+  </div>
+
+  <div class="pr-row">
+    <div class="pr-repo">
+      CodePulse — playbackCalc edge-case coverage
+      <span class="sub label dim">OWNED REPO</span>
+    </div>
+    <div class="pr-pipeline label">
+      <span>SCANNED</span>·<span>FIXED</span>·<span>TESTED</span>·<span>OPENED</span>·<span>MERGED</span>
+    </div>
+    <span class="tag on label">VERIFIED &amp; MERGED</span>
+  </div>
+</section>
+
+<section id="demo">
+  <div class="section-label label dim">// TRY IT</div>
+  <div style="font-size:30px; font-family: var(--font-contrast); line-height:1.13; letter-spacing:-0.5px;">Run a live scan on your own repo</div>
+  <p style="font-size:16px; line-height:1.25; margin-top:12px;">Read-only. We scan a public repo and show what we'd find — nothing is written back.</p>
+  <div class="demo-input">
+    <input type="text" placeholder="github.com/username">
+    <a class="pill pill-solid" href="#">Scan</a>
+  </div>
+</section>
+
+<footer>
+  <span class="label dim">PRISM — INTELLIGENT PR TRUST &amp; MERGE VERIFICATION</span>
+  <span class="label dim">© 2026</span>
+</footer>
+
+<script>
+  const heatmap = document.getElementById('heatmap');
+  const levels = ['', 'l1', 'l2', 'l3', 'l4'];
+  for (let i = 0; i < 364; i++) {
+    const cell = document.createElement('div');
+    const r = Math.random();
+    const level = r < 0.4 ? 0 : r < 0.65 ? 1 : r < 0.85 ? 2 : r < 0.95 ? 3 : 4;
+    cell.className = 'cell ' + levels[level];
+    heatmap.appendChild(cell);
+  }
+</script>
+
+</body>
+</html>
