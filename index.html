@@ -97,6 +97,17 @@
   .demo-input input::placeholder { color: var(--color-charcoal-vein); }
   .demo-input input:focus { outline: none; border-color: var(--color-bone-glow); }
 
+  .gap-row {
+    padding: 12px 0; border-bottom: 1px solid var(--color-charcoal-vein);
+  }
+  .gap-row:last-child { border-bottom: none; }
+  .gap-row .gap-fn { font-size: 16px; line-height: 1.25; }
+  .gap-row .gap-meta { margin-top: 4px; color: var(--color-charcoal-vein); }
+  .gap-row .gap-score {
+    font-family: var(--font-technik); font-size: 12px; letter-spacing: -0.6px;
+    color: var(--color-rose-quartz-bloom);
+  }
+
   footer {
     padding: 24px; display: flex; justify-content: space-between;
     border-top: 1px solid var(--color-charcoal-vein);
@@ -178,11 +189,13 @@
   <div class="section-label label">// TRY IT</div>
   <div class="demo-block">
     <div style="font-size:30px; font-family: var(--font-contrast); line-height:1.13; letter-spacing:-0.5px;">Run a live scan on your own repo</div>
-    <p style="font-size:16px; line-height:1.25; margin-top:12px; color: var(--color-bone-glow);">Read-only. We scan a public repo and show what we'd find — nothing is written back.</p>
+    <p style="font-size:16px; line-height:1.25; margin-top:12px; color: var(--color-bone-glow);">Read-only. We fetch a public repo and show what we'd find — nothing is written back, and no login is required.</p>
     <div class="demo-input">
-      <input type="text" placeholder="github.com/username">
-      <a class="pill pill-solid" href="#">Scan</a>
+      <input type="text" id="scan-input" placeholder="owner/repo, e.g. TarunSinghChauhan/Text-to-SQL-Agent">
+      <button class="pill pill-solid" id="scan-btn" type="button">Scan</button>
     </div>
+    <div id="scan-status" class="label" style="margin-top:16px; min-height:16px;"></div>
+    <div id="scan-results" style="margin-top:8px;"></div>
   </div>
 </section>
 
@@ -254,6 +267,68 @@
     camera.updateProjectionMatrix();
     renderer.setSize(size.w, size.h, false);
   });
+})();
+</script>
+<script>
+(function() {
+  const btn = document.getElementById('scan-btn');
+  const input = document.getElementById('scan-input');
+  const status = document.getElementById('scan-status');
+  const results = document.getElementById('scan-results');
+
+  async function runScan() {
+    const repo = input.value.trim();
+    if (!repo) {
+      status.textContent = 'ENTER A REPO FIRST, E.G. OWNER/REPO';
+      return;
+    }
+    btn.disabled = true;
+    btn.textContent = 'Scanning...';
+    status.textContent = 'FETCHING PUBLIC REPO AND ANALYZING...';
+    results.innerHTML = '';
+
+    try {
+      const res = await fetch('/api/scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ repo })
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        status.textContent = 'ERROR: ' + (data.error || 'scan failed');
+        return;
+      }
+
+      if (data.gap_count === 0) {
+        status.textContent = `NO GAPS FOUND IN ${data.repo.toUpperCase()} ${data.note ? '— ' + data.note.toUpperCase() : ''}`;
+        return;
+      }
+
+      status.textContent = `${data.gap_count} GENUINE GAP${data.gap_count === 1 ? '' : 'S'} FOUND IN ${data.repo.toUpperCase()}`;
+      results.innerHTML = data.gaps.map(g => `
+        <div class="gap-row">
+          <div class="gap-fn">${escapeHtml(g.function)}</div>
+          <div class="gap-meta label">${escapeHtml(g.file)} · LINES ${g.lines} · COMPLEXITY ${g.complexity}</div>
+          <div class="gap-score">SCORE ${g.score}</div>
+        </div>
+      `).join('');
+    } catch (err) {
+      status.textContent = 'ERROR: could not reach the scan service';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Scan';
+    }
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  btn.addEventListener('click', runScan);
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') runScan(); });
 })();
 </script>
 </body>
