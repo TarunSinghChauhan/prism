@@ -50,7 +50,7 @@ class GeminiClient(LLMClient):
     test in this repo — requires GEMINI_API_KEY and a live network call.
     Verify this path yourself before the Fixer drives real PRs."""
 
-    def __init__(self, api_key: str | None = None, model: str = "gemini-2.0-flash"):
+    def __init__(self, api_key: str | None = None, model: str = "gemini-3.1-flash-lite"):
         self.api_key = api_key or os.environ.get("GEMINI_API_KEY")
         if not self.api_key:
             raise RuntimeError("GEMINI_API_KEY not set")

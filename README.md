@@ -87,3 +87,39 @@ was available. Before trusting this in a real pipeline:
 - JS/TS support
 - Shipper (branch → commit → push → `gh pr create`)
 - Rate limiting on the public /api/scan endpoint (see chat — flagged, not yet built)
+
+## Shipper (new)
+
+`scanner/shipper/` — takes a verified FixResult and actually opens a PR.
+
+**The one rule that matters, enforced in code:** `ship_fix()` checks write
+access via the GitHub API before doing anything else. If the token doesn't
+have push access to the target repo, the PR is **forced to draft** —
+regardless of how good the fix is. This is proven by
+`test_ship_fix_forces_draft_on_external_repo_with_no_write_access` in
+`tests/test_shipper_pipeline.py`, arguably the most important test in this
+whole project: it's the code-level guarantee behind "PRism never spams
+external maintainers," not just a design doc claim.
+
+**What's genuinely tested (13 tests across 2 files):**
+- Git operations (branch, apply fix, commit, push) against a **real local
+  git repo + real bare "remote"** — proves push actually works, no network
+  or GitHub account needed to verify this part
+- GitHub API request construction and response handling, via injected
+  fake HTTP calls — proves the draft-flag logic and error handling, again
+  without hitting the real API
+
+**What's NOT yet tested:** an actual PR opened against real GitHub. The
+`_get`/`_post` injection points mean the only untested seam is the real
+HTTP call itself. Before using this for real: set a `GITHUB_TOKEN` with
+repo scope, and run `ship_fix()` against a real verified FixResult (from
+`check_fixer_live.py`) targeting one of your own repos first — never an
+external one, until you've watched it behave correctly on your own.
+
+## Next up
+
+- Real end-to-end run: Scanner → Fixer (live Gemini) → Shipper → real PR,
+  on one of your own repos, with a real GitHub token
+- CI-watch + auto-merge for owned repos once the PR is open and green
+- Rate limiting on the public /api/scan endpoint (still flagged, not built)
+- JS/TS support
