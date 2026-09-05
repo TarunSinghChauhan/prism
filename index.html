@@ -222,7 +222,6 @@
   const camera = new THREE.PerspectiveCamera(38, w / h, 0.1, 100);
   camera.position.set(0, 0, 7);
 
-  // Triangular prism: cylinder with 3 radial segments, laid on its side
   const geometry = new THREE.CylinderGeometry(1.6, 1.6, 3.4, 3, 1, false);
   const material = new THREE.MeshStandardMaterial({
     color: 0xe4dfda,
@@ -237,14 +236,12 @@
   prism.rotation.x = 0.35;
   scene.add(prism);
 
-  // Wireframe overlay for the "engineering blueprint" edge look
   const wireGeo = new THREE.EdgesGeometry(geometry);
   const wireMat = new THREE.LineBasicMaterial({ color: 0xe4dfda, transparent: true, opacity: 0.5 });
   const wireframe = new THREE.LineSegments(wireGeo, wireMat);
   wireframe.rotation.copy(prism.rotation);
   scene.add(wireframe);
 
-  // Lighting: dim ambient + bone-white key light + rose-quartz rim light
   scene.add(new THREE.AmbientLight(0x2a2925, 1.2));
   const key = new THREE.DirectionalLight(0xe4dfda, 1.1);
   key.position.set(-4, 3, 5);
@@ -296,7 +293,9 @@
       const data = await res.json();
 
       if (!res.ok) {
-        status.textContent = 'ERROR: ' + (data.error || 'scan failed');
+        status.textContent = res.status === 429
+          ? (data.error || 'Too many requests — please wait a bit.')
+          : 'ERROR: ' + (data.error || 'scan failed');
         return;
       }
 
