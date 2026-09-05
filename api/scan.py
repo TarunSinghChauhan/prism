@@ -26,6 +26,21 @@ DOWNLOAD_TIMEOUT_SECONDS = 8
 MAX_RESULTS = 8
 MIN_COMPLEXITY = 2
 
+# --- Rate limiting ---
+# Vercel serverless functions don't share memory across instances, so this
+# is best-effort, not bulletproof: it stops a single script hammering the
+# endpoint from one warm instance, and caps worst-case cost per instance.
+# A determined attacker spreading requests across many cold starts could
+# still get through — closing that gap for real needs a shared store
+# (e.g. Upstash Redis's free tier), which is the honest next step if this
+# ever shows signs of actual abuse rather than normal demo traffic.
+COOLDOWN_SECONDS = 15          # per-IP: one scan every 15s
+MAX_REQUESTS_PER_WINDOW = 20   # per-instance: hard cap regardless of IP
+WINDOW_SECONDS = 300           # 5-minute rolling window for the hard cap
+
+_last_request_by_ip: dict[str, float] = {}
+_request_timestamps: list[float] = []
+
 GITHUB_REF_RE = re.compile(
     r"^(?:https?://github\.com/)?(?P<owner>[\w.-]+)/(?P<repo>[\w.-]+?)(?:\.git)?/?$"
 )
@@ -35,6 +50,37 @@ TEST_FILE_MARKERS = ("test_", "_test", "tests", "conftest")
 
 class ScanError(Exception):
     pass
+
+
+class RateLimitError(Exception):
+    def __init__(self, message: str, retry_after: int):
+        super().__init__(message)
+        self.retry_after = retry_after
+
+
+def check_rate_limit(ip: str, *, _now=None) -> None:
+    """Raises RateLimitError if this request should be rejected. Called
+    before any expensive work (download, parse) happens."""
+    import time
+    now = _now() if _now else time.time()
+
+    # Per-IP cooldown
+    last = _last_request_by_ip.get(ip)
+    if last is not None and (now - last) < COOLDOWN_SECONDS:
+        retry_after = int(COOLDOWN_SECONDS - (now - last)) + 1
+        raise RateLimitError(f"Please wait {retry_after}s between scans.", retry_after)
+
+    # Global hard cap per warm instance, rolling window
+    global _request_timestamps
+    _request_timestamps = [t for t in _request_timestamps if now - t < WINDOW_SECONDS]
+    if len(_request_timestamps) >= MAX_REQUESTS_PER_WINDOW:
+        raise RateLimitError(
+            "This demo is getting heavy traffic right now — please try again shortly.",
+            WINDOW_SECONDS,
+        )
+
+    _last_request_by_ip[ip] = now
+    _request_timestamps.append(now)
 
 
 def parse_ref(ref: str) -> tuple[str, str]:
@@ -194,6 +240,12 @@ class handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         try:
+            client_ip = (
+                self.headers.get("x-forwarded-for", "").split(",")[0].strip()
+                or self.client_address[0]
+            )
+            check_rate_limit(client_ip)
+
             length = int(self.headers.get("Content-Length", 0))
             raw = self.rfile.read(length) if length else b"{}"
             payload = json.loads(raw or b"{}")
@@ -203,6 +255,8 @@ class handler(BaseHTTPRequestHandler):
                 return
             result = run_scan(ref)
             self._send_json(200, result)
+        except RateLimitError as exc:
+            self._send_json(429, {"error": str(exc), "retry_after": exc.retry_after})
         except ScanError as exc:
             self._send_json(400, {"error": str(exc)})
         except Exception as exc:  # last-resort guard so the function never 500s silently
