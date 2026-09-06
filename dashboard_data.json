@@ -1,0 +1,25 @@
+{
+  "generated_at": "2026-09-06T07:39:24.828865+00:00",
+  "repos_monitored": 1,
+  "total_gaps_found_across_repos": 16,
+  "prs_opened": 1,
+  "prs_merged": 0,
+  "verified_genuine_prs": 1,
+  "per_repo": [
+    {
+      "repo": "TarunSinghChauhan/Text-to-SQL-Agent",
+      "gaps_found": 16,
+      "top_gap": "save_and_generate_sql"
+    }
+  ],
+  "pull_requests": [
+    {
+      "repo": "TarunSinghChauhan/Text-to-SQL-Agent",
+      "pr_number": 1,
+      "url": "https://github.com/TarunSinghChauhan/Text-to-SQL-Agent/pull/1",
+      "title": "Add test coverage: save_and_generate_sql",
+      "status": "open",
+      "verified_genuine": true
+    }
+  ]
+}
