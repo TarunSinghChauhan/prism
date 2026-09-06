@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-09-06T07:39:24.828865+00:00",
-  "repos_monitored": 1,
-  "total_gaps_found_across_repos": 16,
+  "generated_at": "2026-09-06T07:57:14.564947+00:00",
+  "repos_monitored": 2,
+  "total_gaps_found_across_repos": 23,
   "prs_opened": 1,
   "prs_merged": 0,
   "verified_genuine_prs": 1,
@@ -10,6 +10,11 @@
       "repo": "TarunSinghChauhan/Text-to-SQL-Agent",
       "gaps_found": 16,
       "top_gap": "save_and_generate_sql"
+    },
+    {
+      "repo": "TarunSinghChauhan/Multimodal-Product-Intelligence-Platform",
+      "gaps_found": 7,
+      "top_gap": "train_vit"
     }
   ],
   "pull_requests": [
