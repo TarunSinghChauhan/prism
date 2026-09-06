@@ -138,7 +138,7 @@
 </head>
 <body>
 
-<div class="preview-banner">⚠ DESIGN PREVIEW — ALL NUMBERS AND PRs BELOW ARE PLACEHOLDER DATA, NOT LIVE</div>
+<div id="status-banner"></div>
 <div class="top-row">
   <div class="wordmark">PRISM</div>
   <div class="nav-pills">
@@ -154,103 +154,142 @@
   <p>Every PR below passed the same check: the diff matches the message, and real tests back it up. Nothing here is padded.</p>
 </div>
 
-<div class="stats-row">
-  <div class="stat">
-    <div class="num">5</div>
-    <div class="label lbl">REPOS MONITORED</div>
-  </div>
-  <div class="stat">
-    <div class="num">3</div>
-    <div class="label lbl">OSS PRs SUBMITTED</div>
-  </div>
-  <div class="stat">
-    <div class="num">100%</div>
-    <div class="label lbl">VERIFIED DIFF MATCH</div>
-  </div>
-  <div class="stat">
-    <div class="num">0</div>
-    <div class="label lbl">EMPTY/REJECTED COMMITS</div>
-  </div>
+<div class="stats-row" id="stats-row">
+  <div class="stat"><div class="num">—</div><div class="label lbl">LOADING...</div></div>
 </div>
 
 <section>
-  <div class="section-label label dim">// CONTRIBUTION ACTIVITY</div>
-  <div class="heatmap-wrap">
-    <div class="heatmap" id="heatmap"></div>
-  </div>
-  <div class="heatmap-legend label dim">
-    <span>LESS</span>
-    <span class="legend-swatch" style="background: var(--color-charcoal-vein);"></span>
-    <span class="legend-swatch" style="background: rgba(228,223,218,0.25);"></span>
-    <span class="legend-swatch" style="background: rgba(228,223,218,0.5);"></span>
-    <span class="legend-swatch" style="background: rgba(228,223,218,0.75);"></span>
-    <span class="legend-swatch" style="background: var(--color-bone-glow);"></span>
-    <span>MORE</span>
-  </div>
+  <div class="section-label label dim">// GAPS FOUND PER REPO (real Scanner output)</div>
+  <div id="per-repo-list"></div>
 </section>
 
 <section>
-  <div class="section-label label dim">// RECENT PULL REQUESTS</div>
-
-  <div class="pr-row">
-    <div class="pr-repo">
-      qdrant/qdrant-client — datetime_utils.parse truncation fix
-      <span class="sub label dim">#1380 · EXTERNAL REPO</span>
-    </div>
-    <div class="pr-pipeline label">
-      <span>SCANNED</span>·<span>FIXED</span>·<span>TESTED</span>·<span>OPENED</span>·<span class="pipe-step dim">MERGED</span>
-    </div>
-    <span class="tag label">PENDING REVIEW</span>
-  </div>
-
-  <div class="pr-row">
-    <div class="pr-repo">
-      langchain-ai/langsmith-sdk — feedback_config Pydantic union bug
-      <span class="sub label dim">#3429 · EXTERNAL REPO</span>
-    </div>
-    <div class="pr-pipeline label">
-      <span>SCANNED</span>·<span>FIXED</span>·<span>TESTED</span>·<span>OPENED</span>·<span class="pipe-step dim">MERGED</span>
-    </div>
-    <span class="tag label">PENDING REVIEW</span>
-  </div>
-
-  <div class="pr-row">
-    <div class="pr-repo">
-      CodePulse — playbackCalc edge-case coverage
-      <span class="sub label dim">OWNED REPO</span>
-    </div>
-    <div class="pr-pipeline label">
-      <span>SCANNED</span>·<span>FIXED</span>·<span>TESTED</span>·<span>OPENED</span>·<span>MERGED</span>
-    </div>
-    <span class="tag on label">VERIFIED &amp; MERGED</span>
-  </div>
+  <div class="section-label label dim">// PULL REQUESTS OPENED BY PRISM</div>
+  <div id="pr-list"></div>
 </section>
 
 <section id="demo">
   <div class="section-label label dim">// TRY IT</div>
   <div style="font-size:30px; font-family: var(--font-contrast); line-height:1.13; letter-spacing:-0.5px;">Run a live scan on your own repo</div>
-  <p style="font-size:16px; line-height:1.25; margin-top:12px;">Read-only. We scan a public repo and show what we'd find — nothing is written back.</p>
+  <p style="font-size:16px; line-height:1.25; margin-top:12px;">Read-only. We fetch a public repo and show what we'd find — nothing is written back, and no login is required.</p>
   <div class="demo-input">
-    <input type="text" placeholder="github.com/username">
-    <a class="pill pill-solid" href="#">Scan</a>
+    <input type="text" id="scan-input" placeholder="owner/repo, e.g. TarunSinghChauhan/Text-to-SQL-Agent">
+    <button class="pill pill-solid" id="scan-btn" type="button">Scan</button>
   </div>
+  <div id="scan-status" class="label" style="margin-top:16px; min-height:16px;"></div>
+  <div id="scan-results" style="margin-top:8px;"></div>
 </section>
 
 <footer>
   <span class="label dim">PRISM — INTELLIGENT PR TRUST &amp; MERGE VERIFICATION</span>
-  <span class="label dim">© 2026</span>
+  <span class="label dim" id="last-updated"></span>
 </footer>
 
 <script>
-  const heatmap = document.getElementById('heatmap');
-  const levels = ['', 'l1', 'l2', 'l3', 'l4'];
-  for (let i = 0; i < 364; i++) {
-    const cell = document.createElement('div');
-    const r = Math.random();
-    const level = r < 0.4 ? 0 : r < 0.65 ? 1 : r < 0.85 ? 2 : r < 0.95 ? 3 : 4;
-    cell.className = 'cell ' + levels[level];
-    heatmap.appendChild(cell);
+(function() {
+  const statsRow = document.getElementById('stats-row');
+  const perRepoList = document.getElementById('per-repo-list');
+  const prList = document.getElementById('pr-list');
+  const lastUpdated = document.getElementById('last-updated');
+  const banner = document.getElementById('status-banner');
+
+  fetch('dashboard_data.json')
+    .then(r => {
+      if (!r.ok) throw new Error('no data file');
+      return r.json();
+    })
+    .then(data => {
+      statsRow.innerHTML = `
+        <div class="stat"><div class="num">${data.repos_monitored}</div><div class="label lbl">REPOS MONITORED</div></div>
+        <div class="stat"><div class="num">${data.total_gaps_found_across_repos}</div><div class="label lbl">GENUINE GAPS FOUND</div></div>
+        <div class="stat"><div class="num">${data.prs_opened}</div><div class="label lbl">PRs OPENED</div></div>
+        <div class="stat"><div class="num">${data.prs_merged}</div><div class="label lbl">PRs MERGED</div></div>
+      `;
+
+      perRepoList.innerHTML = data.per_repo.map(r => `
+        <div class="pr-row">
+          <div class="pr-repo">${r.repo}<span class="sub label dim">TOP GAP: ${r.top_gap || 'none found'}</span></div>
+          <div class="pr-pipeline label">${r.gaps_found} GAPS FOUND</div>
+        </div>
+      `).join('') || '<p class="label dim">No repos scanned yet.</p>';
+
+      prList.innerHTML = data.pull_requests.map(pr => `
+        <div class="pr-row">
+          <div class="pr-repo">
+            <a href="${pr.url}" target="_blank">${pr.repo} — ${pr.title}</a>
+            <span class="sub label dim">#${pr.pr_number}</span>
+          </div>
+          <span class="tag ${pr.status === 'merged' ? 'on' : ''} label">${pr.status === 'merged' ? 'VERIFIED & MERGED' : 'OPEN — AWAITING REVIEW'}</span>
+        </div>
+      `).join('') || '<p class="label dim">No PRs opened yet.</p>';
+
+      const updated = new Date(data.generated_at);
+      lastUpdated.textContent = `DATA LAST GENERATED: ${updated.toISOString().slice(0, 16).replace('T', ' ')} UTC`;
+    })
+    .catch(() => {
+      banner.innerHTML = '<div class="preview-banner">⚠ dashboard_data.json not found or failed to load — showing no data rather than fake data.</div>';
+      statsRow.innerHTML = '';
+      perRepoList.innerHTML = '<p class="label dim">Data unavailable.</p>';
+      prList.innerHTML = '<p class="label dim">Data unavailable.</p>';
+    });
+})();
+</script>
+
+<script>
+(function() {
+  const btn = document.getElementById('scan-btn');
+  const input = document.getElementById('scan-input');
+  const status = document.getElementById('scan-status');
+  const results = document.getElementById('scan-results');
+
+  async function runScan() {
+    const repo = input.value.trim();
+    if (!repo) { status.textContent = 'ENTER A REPO FIRST, E.G. OWNER/REPO'; return; }
+    btn.disabled = true;
+    btn.textContent = 'Scanning...';
+    status.textContent = 'FETCHING PUBLIC REPO AND ANALYZING...';
+    results.innerHTML = '';
+    try {
+      const res = await fetch('/api/scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ repo })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        status.textContent = res.status === 429
+          ? (data.error || 'Too many requests — please wait a bit.')
+          : 'ERROR: ' + (data.error || 'scan failed');
+        return;
+      }
+      if (data.gap_count === 0) {
+        status.textContent = `NO GAPS FOUND IN ${data.repo.toUpperCase()} ${data.note ? '— ' + data.note.toUpperCase() : ''}`;
+        return;
+      }
+      status.textContent = `${data.gap_count} GENUINE GAP${data.gap_count === 1 ? '' : 'S'} FOUND IN ${data.repo.toUpperCase()}`;
+      results.innerHTML = data.gaps.map(g => `
+        <div class="pr-row">
+          <div class="pr-repo">${escapeHtml(g.function)}<span class="sub label dim">${escapeHtml(g.file)} · LINES ${g.lines} · COMPLEXITY ${g.complexity}</span></div>
+          <span class="label" style="color: var(--color-rose-quartz-bloom);">SCORE ${g.score}</span>
+        </div>
+      `).join('');
+    } catch (err) {
+      status.textContent = 'ERROR: could not reach the scan service';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Scan';
+    }
   }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  btn.addEventListener('click', runScan);
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') runScan(); });
+})();
 </script>
 
 </body>
