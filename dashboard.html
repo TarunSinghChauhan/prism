@@ -269,7 +269,7 @@
       status.textContent = `${data.gap_count} GENUINE GAP${data.gap_count === 1 ? '' : 'S'} FOUND IN ${data.repo.toUpperCase()}`;
       results.innerHTML = data.gaps.map(g => `
         <div class="pr-row">
-          <div class="pr-repo">${escapeHtml(g.function)}<span class="sub label dim">${escapeHtml(g.file)} · LINES ${g.lines} · COMPLEXITY ${g.complexity}</span></div>
+          <div class="pr-repo">${escapeHtml(g.function)}<span class="sub label dim">${escapeHtml(g.file)} · LINES ${g.lines} · COMPLEXITY ${g.complexity} · ${(g.language || '').toUpperCase()}</span></div>
           <span class="label" style="color: var(--color-rose-quartz-bloom);">SCORE ${g.score}</span>
         </div>
       `).join('');
