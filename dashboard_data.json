@@ -1,15 +1,15 @@
 {
-  "generated_at": "2026-09-06T07:57:14.564947+00:00",
+  "generated_at": "2026-09-08T07:42:22.370980+00:00",
   "repos_monitored": 2,
-  "total_gaps_found_across_repos": 23,
+  "total_gaps_found_across_repos": 22,
   "prs_opened": 1,
-  "prs_merged": 0,
+  "prs_merged": 1,
   "verified_genuine_prs": 1,
   "per_repo": [
     {
       "repo": "TarunSinghChauhan/Text-to-SQL-Agent",
-      "gaps_found": 16,
-      "top_gap": "save_and_generate_sql"
+      "gaps_found": 15,
+      "top_gap": "AgentEvaluator.evaluate_quality"
     },
     {
       "repo": "TarunSinghChauhan/Multimodal-Product-Intelligence-Platform",
@@ -23,7 +23,7 @@
       "pr_number": 1,
       "url": "https://github.com/TarunSinghChauhan/Text-to-SQL-Agent/pull/1",
       "title": "Add test coverage: save_and_generate_sql",
-      "status": "open",
+      "status": "merged",
       "verified_genuine": true
     }
   ]
