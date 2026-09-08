@@ -308,7 +308,7 @@
       results.innerHTML = data.gaps.map(g => `
         <div class="gap-row">
           <div class="gap-fn">${escapeHtml(g.function)}</div>
-          <div class="gap-meta label">${escapeHtml(g.file)} · LINES ${g.lines} · COMPLEXITY ${g.complexity}</div>
+          <div class="gap-meta label">${escapeHtml(g.file)} · LINES ${g.lines} · COMPLEXITY ${g.complexity} · ${(g.language || '').toUpperCase()}</div>
           <div class="gap-score">SCORE ${g.score}</div>
         </div>
       `).join('');
