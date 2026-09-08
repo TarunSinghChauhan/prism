@@ -3,12 +3,15 @@ Vercel serverless function backing the "Run a live scan" button.
 
 No GitHub token required: public repos can be fetched over plain HTTPS via
 codeload.github.com, the same mechanism `pip install git+https://...` uses.
-Self-contained (stdlib only) since each Vercel Python function ships its own
-dependencies independently.
+
+Python analysis is stdlib-only. JS/TS analysis needs `esprima` (see
+api/requirements.txt) — the one non-stdlib dependency in this function,
+added deliberately and for the first time to support JS/TS repos.
 
 This is a trimmed, sandboxed copy of the same gap-finding logic proven in
-scanner/ast_analysis.py — kept in sync by hand for now; once this is stable,
-worth extracting into a shared package both sides import.
+scanner/ast_analysis.py and scanner/js_analysis.py — kept in sync by hand
+for now; once this is stable, worth extracting into a shared package both
+sides import.
 """
 from __future__ import annotations
 
@@ -20,6 +23,8 @@ import tarfile
 import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler
+
+import esprima
 
 MAX_DOWNLOAD_BYTES = 25 * 1024 * 1024  # 25MB — has to fit a serverless timeout
 DOWNLOAD_TIMEOUT_SECONDS = 8
@@ -44,8 +49,16 @@ _request_timestamps: list[float] = []
 GITHUB_REF_RE = re.compile(
     r"^(?:https?://github\.com/)?(?P<owner>[\w.-]+)/(?P<repo>[\w.-]+?)(?:\.git)?/?$"
 )
-SKIP_DIRS = {"venv", ".venv", "env", "node_modules", "__pycache__", "build", "dist", "migrations", "vendor"}
+SKIP_DIRS = {"venv", ".venv", "env", "node_modules", "__pycache__", "build", "dist", "migrations", "vendor", ".next", "coverage"}
 TEST_FILE_MARKERS = ("test_", "_test", "tests", "conftest")
+
+JS_EXTENSIONS = (".js", ".jsx", ".ts", ".tsx")
+JS_TEST_MARKERS = (".test.", ".spec.", "__tests__")
+JS_BRANCH_TYPES = {
+    "IfStatement", "ForStatement", "ForInStatement", "ForOfStatement",
+    "WhileStatement", "DoWhileStatement", "TryStatement", "SwitchCase",
+    "LogicalExpression",
+}
 
 
 class ScanError(Exception):
@@ -109,10 +122,10 @@ def fetch_tarball(owner: str, repo: str) -> bytes:
     raise ScanError(f"'{owner}/{repo}' not found (checked main and master branches)")
 
 
-def iter_python_sources(tar_bytes: bytes):
+def iter_sources(tar_bytes: bytes, extensions: tuple[str, ...]):
     with tarfile.open(fileobj=io.BytesIO(tar_bytes), mode="r:gz") as tar:
         for member in tar.getmembers():
-            if not member.isfile() or not member.name.endswith(".py"):
+            if not member.isfile() or not member.name.endswith(extensions):
                 continue
             parts = member.name.split("/")
             if any(p in SKIP_DIRS for p in parts):
@@ -134,6 +147,11 @@ def is_test_file(path: str) -> bool:
     return any(m in name for m in TEST_FILE_MARKERS) or "tests" in path.lower().split("/")
 
 
+def is_js_test_file(path: str) -> bool:
+    name = path.rsplit("/", 1)[-1].lower()
+    return any(m in name for m in JS_TEST_MARKERS) or "__tests__" in path.split("/")
+
+
 def complexity_of(node: ast.AST) -> int:
     branch_types = (ast.If, ast.For, ast.While, ast.Try, ast.BoolOp, ast.With)
     return sum(1 for child in ast.walk(node) if isinstance(child, branch_types))
@@ -152,20 +170,157 @@ def is_trivial_body(node) -> bool:
     return False
 
 
-def run_scan(ref: str) -> dict:
-    owner, repo = parse_ref(ref)
-    tar_bytes = fetch_tarball(owner, repo)
+# --- JS/TS analysis (mirrors scanner/js_analysis.py; see that file for the
+# fuller honest-scope-limit explanation — real TypeScript syntax like
+# interfaces/generics can't be parsed by esprima and is silently skipped,
+# same "skip, don't crash" behavior as a Python SyntaxError) ---
 
-    sources = list(iter_python_sources(tar_bytes))
-    test_sources = [(p, s) for p, s in sources if is_test_file(p)]
-    main_sources = [(p, s) for p, s in sources if not is_test_file(p)]
+def js_try_parse(source: str):
+    for parser in (esprima.parseModule, esprima.parseScript):
+        try:
+            return parser(source, options={"loc": True}, tolerant=True)
+        except Exception:
+            continue
+    return None
 
-    if not main_sources:
-        return {"repo": f"{owner}/{repo}", "mode": "demo (read-only)", "gap_count": 0, "gaps": [],
-                "note": "No Python source files found in this repo."}
+
+def js_walk_all(node):
+    if node is None:
+        return
+    if isinstance(node, list):
+        for item in node:
+            yield from js_walk_all(item)
+        return
+    if not hasattr(node, "type"):
+        return
+    yield node
+    for key, value in vars(node).items():
+        if key in ("loc", "range"):
+            continue
+        yield from js_walk_all(value)
+
+
+def js_complexity_of(node) -> int:
+    return sum(1 for n in js_walk_all(node) if n.type in JS_BRANCH_TYPES)
+
+
+def js_is_trivial_body(func_node) -> bool:
+    if getattr(func_node, "expression", False):
+        return js_complexity_of(func_node.body) == 0
+    stmts = getattr(func_node.body, "body", [])
+    if not stmts:
+        return True
+    if len(stmts) == 1 and stmts[0].type == "ReturnStatement":
+        arg = getattr(stmts[0], "argument", None)
+        if arg is None:
+            return True
+        return getattr(arg, "type", None) == "Literal"
+    return False
+
+
+def js_collect_test_identifiers(test_sources: list[str]) -> set[str]:
+    names: set[str] = set()
+    for source in test_sources:
+        tree = js_try_parse(source)
+        if tree is None:
+            continue
+        for node in js_walk_all(tree):
+            if node.type == "Identifier":
+                names.add(node.name)
+            elif node.type == "Property":
+                key = getattr(node, "key", None)
+                if key is not None and getattr(key, "type", None) == "Identifier":
+                    names.add(key.name)
+    return names
+
+
+def js_collect_functions(node, class_stack: list[str], results: list[dict], file_path: str):
+    if node is None:
+        return
+    if isinstance(node, list):
+        for item in node:
+            js_collect_functions(item, class_stack, results, file_path)
+        return
+    if not hasattr(node, "type"):
+        return
+
+    t = node.type
+    pushed = False
+
+    def register(func_node, name):
+        cx = js_complexity_of(func_node.body)
+        if cx < MIN_COMPLEXITY or js_is_trivial_body(func_node):
+            return
+        qualname = ".".join(class_stack + [name])
+        length = max(func_node.loc.end.line - func_node.loc.start.line, 1)
+        score = round(cx * 2 + (cx / length) * 10, 2)
+        results.append({
+            "function": qualname,
+            "file": file_path,
+            "lines": f"{func_node.loc.start.line}-{func_node.loc.end.line}",
+            "complexity": cx,
+            "score": score,
+            "reason": f"'{qualname}' has real branching logic (complexity {cx}) "
+                      f"and no reference found in any test file",
+            "language": "javascript",
+            "_name": name,  # used for the tested-identifier check, stripped before response
+        })
+
+    if t == "FunctionDeclaration" and node.id and not node.id.name.startswith("_"):
+        register(node, node.id.name)
+    elif t == "VariableDeclarator":
+        init = getattr(node, "init", None)
+        idnode = getattr(node, "id", None)
+        if (init is not None and getattr(init, "type", None) in ("FunctionExpression", "ArrowFunctionExpression")
+                and idnode is not None and getattr(idnode, "type", None) == "Identifier"
+                and not idnode.name.startswith("_")):
+            register(init, idnode.name)
+    elif t == "MethodDefinition":
+        key = getattr(node, "key", None)
+        name = getattr(key, "name", None) if key is not None else None
+        value = getattr(node, "value", None)
+        if (name and not name.startswith("_") and name != "constructor"
+                and value is not None and getattr(value, "type", None) == "FunctionExpression"):
+            register(value, name)
+    elif t == "ClassDeclaration":
+        cname = getattr(getattr(node, "id", None), "name", None)
+        if cname:
+            class_stack.append(cname)
+            pushed = True
+
+    for key, value in vars(node).items():
+        if key in ("loc", "range"):
+            continue
+        js_collect_functions(value, class_stack, results, file_path)
+
+    if pushed:
+        class_stack.pop()
+
+
+def find_js_gaps(js_sources: list[tuple[str, str]]) -> list[dict]:
+    test_sources = [s for p, s in js_sources if is_js_test_file(p)]
+    main_sources = [(p, s) for p, s in js_sources if not is_js_test_file(p)]
+    tested_names = js_collect_test_identifiers(test_sources)
+
+    all_gaps: list[dict] = []
+    for path, source in main_sources:
+        tree = js_try_parse(source)
+        if tree is None:
+            continue  # unparseable — likely real TS syntax; skip, don't crash
+        results: list[dict] = []
+        js_collect_functions(tree, [], results, path)
+        for gap in results:
+            if gap.pop("_name") not in tested_names:
+                all_gaps.append(gap)
+    return all_gaps
+
+
+def find_python_gaps(py_sources: list[tuple[str, str]]) -> list[dict]:
+    test_sources = [s for p, s in py_sources if is_test_file(p)]
+    main_sources = [(p, s) for p, s in py_sources if not is_test_file(p)]
 
     tested_names: set[str] = set()
-    for _, source in test_sources:
+    for source in test_sources:
         try:
             tree = ast.parse(source)
         except SyntaxError:
@@ -181,7 +336,7 @@ def run_scan(ref: str) -> dict:
         try:
             tree = ast.parse(source)
         except SyntaxError:
-            continue
+            continue  # e.g. Python 2 syntax, or a genuine syntax error — skip, don't crash
 
         stack: list[str] = []
 
@@ -202,6 +357,7 @@ def run_scan(ref: str) -> dict:
                                 "score": score,
                                 "reason": f"'{qualname}' has real branching logic (complexity {cx}) "
                                           f"and no reference found in any test file",
+                                "language": "python",
                             })
                     stack.append(child.name)
                     visit(child, stack, path)
@@ -215,10 +371,40 @@ def run_scan(ref: str) -> dict:
 
         visit(tree)
 
+    return gaps
+
+
+def run_scan(ref: str) -> dict:
+    owner, repo = parse_ref(ref)
+    tar_bytes = fetch_tarball(owner, repo)
+
+    py_sources = list(iter_sources(tar_bytes, (".py",)))
+    js_sources = list(iter_sources(tar_bytes, JS_EXTENSIONS))
+
+    if not py_sources and not js_sources:
+        return {"repo": f"{owner}/{repo}", "mode": "demo (read-only)", "gap_count": 0, "gaps": [],
+                "note": "No Python or JavaScript/TypeScript source files found in this repo."}
+
+    gaps: list[dict] = []
+    languages_scanned = []
+    if py_sources:
+        gaps.extend(find_python_gaps(py_sources))
+        languages_scanned.append("python")
+    if js_sources:
+        gaps.extend(find_js_gaps(js_sources))
+        languages_scanned.append("javascript/typescript")
+
     gaps.sort(key=lambda g: g["score"], reverse=True)
     top = gaps[:MAX_RESULTS]
 
-    return {"repo": f"{owner}/{repo}", "mode": "demo (read-only)", "gap_count": len(top), "gaps": top}
+    result = {"repo": f"{owner}/{repo}", "mode": "demo (read-only)", "gap_count": len(top), "gaps": top}
+    if not top:
+        result["note"] = (
+            f"Scanned {' and '.join(languages_scanned)} source, found no untested gaps "
+            f"above the complexity threshold — may mean it's already well-tested, or "
+            f"(for TypeScript) uses type syntax this scanner can't parse yet."
+        )
+    return result
 
 
 class handler(BaseHTTPRequestHandler):
